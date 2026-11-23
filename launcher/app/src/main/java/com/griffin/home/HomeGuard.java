@@ -78,6 +78,7 @@ public class HomeGuard extends AccessibilityService {
     private ImageView cover;
     private Bitmap coverShows;
     private volatile boolean covering;
+    static volatile long swallowedOkAt = -1;  // downTime of the last OK kept from Amazon's home
     private volatile long coveredAt, shownAt;
     private VolumeIsland volume;
     private final Runnable removeCover = this::removeCover;
@@ -279,7 +280,12 @@ public class HomeGuard extends AccessibilityService {
                 guard.post(removeCover);
                 return false;
             }
-            return true; // covering Amazon's home: don't let presses reach it
+            // Covering Amazon's home: don't let presses reach it. Griffin Home may still get an OK's
+            // release once it's back; this tells it that release isn't a fresh press.
+            if (event.getKeyCode() == KeyEvent.KEYCODE_DPAD_CENTER
+                    || event.getKeyCode() == KeyEvent.KEYCODE_ENTER
+                    || event.getKeyCode() == KeyEvent.KEYCODE_NUMPAD_ENTER) swallowedOkAt = event.getDownTime();
+            return true;
         }
         if (event.getKeyCode() != KeyEvent.KEYCODE_HOME || Prefs.isPaused(this)) return false;
         if (event.getAction() == KeyEvent.ACTION_UP) openHome();
