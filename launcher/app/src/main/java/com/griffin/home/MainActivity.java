@@ -47,7 +47,8 @@ public class MainActivity extends Activity {
     private volatile int resumes;
     private long openedAt;
     private long lastKeyAt;
-    private boolean okDown, okHeld;
+    private long okPressedAt = -1;
+    private boolean okHeld;
     private final Runnable snapshot = this::snapshot;
     private static java.lang.ref.WeakReference<MainActivity> current;
 
@@ -197,16 +198,17 @@ public class MainActivity extends Activity {
         lastKeyAt = e.getEventTime();
         boolean down = e.getAction() == KeyEvent.ACTION_DOWN;
         if (key.equals("ok")) {
-            if (down && e.getRepeatCount() == 0) {
-                okDown = true;
-                okHeld = false;
-            } else if (down && okDown && !okHeld && e.getEventTime() - e.getDownTime() >= HOLD_MS) {
-                okHeld = true;
-                sendKey("hold");
-            } else if (!down && okDown) {
-                // A release without its press (e.g. the press went to HomeGuard's cover) does nothing.
-                if (!okHeld) sendKey("ok");
-                okDown = false;
+            // Fire OS (since Nov 2026) can keep DPAD_CENTER's first ACTION_DOWN from the app and send
+            // only the release, so presses are told apart by downTime, never by having seen the down.
+            long pressed = e.getDownTime();
+            boolean held = e.getEventTime() - pressed >= HOLD_MS;
+            if (pressed != okPressedAt) { okPressedAt = pressed; okHeld = false; }
+            if (down) {
+                if (held && !okHeld) { okHeld = true; sendKey("hold"); }
+            } else {
+                // Not a press that went to HomeGuard's cover over Amazon's home.
+                if (!okHeld && pressed != HomeGuard.swallowedOkAt) sendKey(held ? "hold" : "ok");
+                okHeld = true; // this press is done
             }
             return true;
         }
